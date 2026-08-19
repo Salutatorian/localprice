@@ -32,9 +32,22 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
+
+# capacitor / android sideload builds
+/android/.gradle
+/android/app/build
+/android/build
+/android/captures
+/android/local.properties
+/android/*.apk
+/android/*.aab
+/ios/App/Pods
+/ios/App/build
+/public/downloads/*.apk
 
 # typescript
 *.tsbuildinfo

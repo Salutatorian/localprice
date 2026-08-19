@@ -1,0 +1,7 @@
+<h2>Your LocalPrice sign-in</h2>
+<p>This link works once and expires shortly. Open it in the same browser you used to request it.</p>
+<p>
+  <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email&next=/scan">Sign in to LocalPrice</a>
+</p>
+<p>Or enter this code on the sign-in page:</p>
+<p style="font-size:24px;letter-spacing:4px"><strong>{{ .Token }}</strong></p>
