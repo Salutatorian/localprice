@@ -1,127 +1,60 @@
 # LocalPrice
 
-LocalPrice is a public, community grocery price ledger. It starts in Saipan, CNMI and expands city by city. Photograph a receipt, wait for extraction, correct yellow uncertain fields, confirm, and stop. Nobody configures Gemini, Google, or Supabase keys in the app.
+Community grocery prices, starting in Saipan. Photograph a receipt. The ledger keeps the price — not the paper.
 
-TaxHacker inspired receipt-to-structure only. The interface, database, verification, and community model are original.
+**[Open the ledger](https://localprice.vercel.app)** · [Install the app](https://localprice.vercel.app/install)
 
-## Local setup without production credentials
+<p align="center">
+  <img src="docs/mockups/desktop.png" alt="LocalPrice on the web, showing Saipan prices on a desktop display" width="920" />
+</p>
+
+Browse without an account. Sign in with Google to contribute a photo, confirm the yellow fields, and publish prices to the board. Nobody configures Gemini, Google, or Supabase keys in the app.
+
+<p align="center">
+  <img src="docs/mockups/phone-home.png" alt="LocalPrice home screen on a phone" width="380" />
+  &nbsp;&nbsp;
+  <img src="docs/mockups/phone-product.png" alt="A product page with lowest listed price and community votes" width="380" />
+</p>
+
+## How it works
+
+1. A signed-in neighbor photographs a receipt they already have.
+2. The server extracts line items. Uncertain fields stay yellow until the contributor confirms them.
+3. Confirmed lines become append-only prices on the market board — provisional until another independent receipt or a moderator backs them up.
+4. Anyone can browse, thumbs-up or thumbs-down a listing they did not submit, or report junk.
+
+The receipt image is private, retained for a short window, then deleted. Structured prices stay.
+
+## Stack
+
+Next.js App Router, Supabase (Postgres, Auth, Storage), Gemini on the server, Vercel, and a Capacitor Android wrapper around the live site. Domain logic lives in TypeScript, not in the model prompt.
+
+Receipt-to-structure is inspired by TaxHacker. The interface, database, verification, and community model are original.
+
+## Develop locally
 
 1. Install Node 22+ and Docker Desktop.
-2. Copy environment defaults:
+2. `copy .env.example .env.local`
+3. `npx supabase start`, then copy the printed API URL, anon key, and service role key into `.env.local`. Leave `GEMINI_API_KEY` and `GOOGLE_PLACES_API_KEY` empty to use the mock extractor.
+4. `npx supabase db reset` (migrations + Saipan seed)
+5. `npm install` and `npm run dev`
+
+Open [http://localhost:3000](http://localhost:3000). It redirects to `/m/saipan`. Magic links for local auth appear in Inbucket at [http://127.0.0.1:54324](http://127.0.0.1:54324).
 
 ```bash
-copy .env.example .env.local
-```
-
-3. Start Supabase and write the local keys into `.env.local`:
-
-```bash
-npx supabase start
-npx supabase status
-```
-
-Use the printed `API URL`, `anon key`, and `service_role key`. Leave `GEMINI_API_KEY` and `GOOGLE_PLACES_API_KEY` empty. Receipt upload still works through the mock extractor.
-
-4. Reset the database (migrations + Saipan seed):
-
-```bash
-npx supabase db reset
-```
-
-5. Run the app:
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000). It redirects to `/m/saipan`. Install the PWA from the browser if you want a home-screen icon. A later Capacitor wrapper can reuse this web app; native store builds are not required to launch.
-
-### Auth locally
-
-Enable Google in the Supabase dashboard when you have a client ID. For local work, magic links appear in Inbucket at [http://127.0.0.1:54324](http://127.0.0.1:54324).
-
-## Scripts
-
-```bash
-npm run dev
 npm run lint
 npm run typecheck
 npm test
 npx playwright test
-npx supabase test db
 ```
 
-## Data flow
+## Docs
 
-1. Authenticated user uploads a receipt photo.
-2. The server compresses it, strips extra metadata, hashes it, and stores it in the private `receipts` bucket under `{userId}/{receiptId}/{random}.jpg`.
-3. An extraction job runs on the server. Mock JSON is used until `FEATURE_GEMINI_EXTRACTION=true` and `GEMINI_API_KEY` are set.
-4. Zod validates the JSON. Arithmetic and dates are checked even when Gemini followed the schema. One retry uses `GEMINI_MODEL_RETRY`.
-5. Stores are matched in LocalPrice first (aliases). Google Places is called only for unknown merchants, inside the market, with a tight field mask, and cached.
-6. The contributor reviews yellow fields and confirms.
-7. Matching items become append-only `price_observations` in `provisional` state. Contributors cannot write `verified`.
-8. Browsing market selection is stored as `browsing_market_id` and is never used to assign the receipt.
+- [Architecture](docs/architecture.md) — app layout, assignment, extraction
+- [Privacy](docs/privacy.md) — what is stored and what is not
+- [Retention](docs/retention.md) — receipt image window
+- [Security](docs/security-checklist.md) — RLS, storage, service role
+- [Cost controls](docs/cost-controls.md) — Gemini, Places, Vercel
+- [Roadmap](docs/roadmap.md) — Saipan launch, then other markets
 
-## Moderation
-
-Moderators and admins are stored in `market_memberships` and `private.app_roles`. Do not authorize from `user_metadata`. Moderators handle unmatched stores, outliers, disputes, and product merges. Every privileged action writes `moderation_actions` and `audit_logs`.
-
-## Receipt retention
-
-Default window is 21 days (`RECEIPT_RETENTION_DAYS`, allowed 14–30). The daily cron `/api/cron/retention` deletes private images that are past `retain_until` and not disputed. Structured observations stay.
-
-## Environment variables
-
-See `.env.example`. Public keys are `NEXT_PUBLIC_*` only. `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, and `GOOGLE_PLACES_API_KEY` stay on the server.
-
-Feature flags:
-
-- `FEATURE_RECEIPT_UPLOAD`
-- `FEATURE_GEMINI_EXTRACTION`
-- `FEATURE_GOOGLE_PLACES`
-- `FEATURE_BASKET_COMPARISON`
-- `FEATURE_MODERATION`
-
-Unfinished work is flagged or shown as empty. There are no fake success screens.
-
-## Migrations and deploy
-
-```bash
-npx supabase db reset          # local
-npx supabase db push           # linked remote, development
-npx supabase gen types typescript --local > lib/supabase/generated.ts
-```
-
-Production only:
-
-```bash
-npx supabase link --project-ref <ref>
-npx supabase db push
-# then deploy the Next.js app on Vercel
-```
-
-Vercel: set the same env vars, add Google redirect `https://<domain>/auth/callback`, and keep cron routes protected with `CRON_SECRET`.
-
-## Security checklist
-
-- RLS is on for every public table.
-- Views use `security_invoker = true`.
-- Anon cannot read receipts, `created_by`, OCR dumps, or storage objects.
-- Storage policies scope objects to `{auth.uid()}/...`. Moderators use signed URLs from server code.
-- Service role is server-only.
-- Rate limits cover upload, flags, and extraction.
-
-## Limitations
-
-- Gemini and Places are off until keys exist.
-- Product matching is barcode-then-name/size/unit, with ambiguous rows left unmatched.
-- Seed data is a Saipan demo catalog, not a live 300-product corpus.
-- Capacitor config is a stub; ship the PWA first.
-
-## Roadmap
-
-1. Seed 300–500 Saipan staples from Joeten, Payless, Superfresh, Ken's, and convenience stores.
-2. Closed beta of 20–40 local contributors who only photograph receipts they already get.
-3. Publish weekly rice, milk, school-lunch, and barbecue basket comparisons.
-4. Activate new markets only after the sandbox threshold in `docs/roadmap.md`.
+Production: same env vars on Vercel, Google redirect `https://<domain>/auth/callback`, cron routes protected with `CRON_SECRET`.
