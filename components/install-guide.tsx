@@ -1,7 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
+
+function subscribeNoop() {
+  return () => {};
+}
+
+function readOrigin() {
+  return window.location.origin;
+}
+
+function readPlatform(): "ios" | "android" | "other" {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(ua)) {
+    return "ios";
+  }
+  if (/Android/i.test(ua)) {
+    return "android";
+  }
+  return "other";
+}
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -11,20 +30,12 @@ type BeforeInstallPromptEvent = Event & {
 export function InstallGuide() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [copied, setCopied] = useState(false);
-  const [origin, setOrigin] = useState("");
-  const [platform, setPlatform] = useState<"ios" | "android" | "other">("other");
+  const origin = useSyncExternalStore(subscribeNoop, readOrigin, () => "");
+  const platform = useSyncExternalStore(subscribeNoop, readPlatform, () => "other" as const);
   const apkHref = "/downloads/localprice-debug.apk";
   const [apkReady, setApkReady] = useState(false);
 
   useEffect(() => {
-    setOrigin(window.location.origin);
-    const ua = navigator.userAgent;
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-      setPlatform("ios");
-    } else if (/Android/i.test(ua)) {
-      setPlatform("android");
-    }
-
     const onPrompt = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
