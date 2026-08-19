@@ -5,13 +5,15 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getServerEnv } from "@/lib/env";
 import { flags } from "@/lib/flags";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { assertReceiptFile, prepareReceiptImage, perceptualHash, sha256 } from "@/server/image";
 import { assignReceiptStore, processExtractionJob } from "@/server/jobs";
 import { ensureProductForItem } from "@/server/products";
+import { enforceRateLimit } from "@/server/rate-limit";
 import { isOutlier } from "@/domain/trust";
+import { firstSubmissionHoldsPrices } from "@/domain/access";
 import { comparableUnitPrice } from "@/lib/units";
+import { requireSignedIn } from "@/server/access";
 
 export async function uploadReceiptAction(formData: FormData) {
   const enabled = flags();
@@ -19,13 +21,9 @@ export async function uploadReceiptAction(formData: FormData) {
     throw new Error("Receipt upload is not enabled in this environment.");
   }
 
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    redirect("/login?next=/scan");
-  }
+  const user = await requireSignedIn("/scan");
+
+  await enforceRateLimit({ action: "upload", userId: user.id });
 
   const file = formData.get("receipt");
   if (!(file instanceof File) || file.size === 0) {
@@ -119,13 +117,7 @@ const reviewSchema = z.object({
 
 export async function confirmReceiptAction(input: z.infer<typeof reviewSchema>) {
   const parsed = reviewSchema.parse(input);
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    redirect("/login");
-  }
+  const user = await requireSignedIn("/scan");
 
   const admin = createAdminSupabase();
   let { data: receipt } = await admin
@@ -172,6 +164,13 @@ export async function confirmReceiptAction(input: z.infer<typeof reviewSchema>) 
     .from("receipt_items")
     .select("*")
     .eq("receipt_id", parsed.receiptId);
+
+  const { count: confirmedCount } = await admin
+    .from("receipts")
+    .select("id", { count: "exact", head: true })
+    .eq("submitter_id", user.id)
+    .eq("status", "confirmed");
+  const firstTime = firstSubmissionHoldsPrices(confirmedCount ?? 0);
 
   let published = 0;
   for (const item of items ?? []) {
@@ -229,34 +228,42 @@ export async function confirmReceiptAction(input: z.infer<typeof reviewSchema>) 
       is_sale: (item.discount_cents ?? 0) > 0,
       observed_on: (receipt.purchased_at ?? new Date().toISOString()).slice(0, 10),
       confidence: 0.8,
-      state: held ? "pending" : "provisional",
+      state: held || firstTime ? "pending" : "provisional",
       evidence_count: 1,
       outlier_held: held,
       created_by: user.id,
     });
-    if (!error && !held) {
+    if (!error && !held && !firstTime) {
       published += 1;
     }
   }
 
-  await admin.from("receipts").update({ status: "confirmed" }).eq("id", parsed.receiptId);
+  await admin
+    .from("receipts")
+    .update({
+      status: firstTime ? "pending_moderation" : "confirmed",
+      first_submission: firstTime,
+    })
+    .eq("id", parsed.receiptId);
   await admin
     .from("extraction_jobs")
     .update({ status: "completed", finished_at: new Date().toISOString() })
     .eq("receipt_id", parsed.receiptId);
-  await admin.from("contributor_trust_events").insert({
-    user_id: user.id,
-    market_id: receipt.market_id,
-    delta: 2,
-    reason: "accepted_receipt",
-  });
+  if (!firstTime) {
+    await admin.from("contributor_trust_events").insert({
+      user_id: user.id,
+      market_id: receipt.market_id,
+      delta: 2,
+      reason: "accepted_receipt",
+    });
+  }
   await admin.from("audit_logs").insert({
     actor_id: user.id,
-    action: "confirm_receipt",
+    action: firstTime ? "queue_first_receipt" : "confirm_receipt",
     entity_type: "receipt",
     entity_id: parsed.receiptId,
-    metadata: { published },
+    metadata: { published, firstTime },
   });
 
-  redirect(`/contributions?published=${published}`);
+  redirect(firstTime ? "/contributions?queued=1" : `/contributions?published=${published}`);
 }

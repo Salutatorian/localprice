@@ -34,8 +34,18 @@ export async function searchPlaces(args: {
         "places.id,places.displayName,places.formattedAddress,places.location,places.businessStatus",
     },
     body: JSON.stringify({
-      textQuery: `${args.query} ${args.marketName}`,
+      textQuery: args.query,
       maxResultCount: 5,
+      regionCode: args.marketName.toLowerCase() === "saipan" ? "MP" : undefined,
+      locationBias:
+        args.marketName.toLowerCase() === "saipan"
+          ? {
+              circle: {
+                center: { latitude: 15.18, longitude: 145.75 },
+                radius: 30000.0,
+              },
+            }
+          : undefined,
     }),
   });
 

@@ -5,6 +5,11 @@ import { matchStore, selectDiscoveredStore } from "@/domain/matching";
 import { assignMarket, browsingCannotAssign } from "@/domain/assignment";
 import { comparableUnitPrice, unitsAreCompatible } from "@/lib/units";
 import { isOutlier } from "@/domain/trust";
+import { passesReceiptGate } from "@/domain/receipt-gate";
+import {
+  firstSubmissionHoldsPrices,
+  isReportReason,
+} from "@/domain/access";
 
 describe("extraction validation", () => {
   it("accepts the mock Joeten receipt", () => {
@@ -56,6 +61,26 @@ describe("store matching", () => {
     ]);
     expect(picked).toBeNull();
   });
+
+  it("rejects a unique local hit when the merchant name does not match", () => {
+    const picked = selectDiscoveredStore("ABC MART", "Saipan", [
+      {
+        name: "Joeten Superstore",
+        address: "Beach Road, Susupe, MP 96950",
+      },
+    ]);
+    expect(picked).toBeNull();
+  });
+
+  it("accepts a unique Saipan hit even when the address only has a village or ZIP", () => {
+    const picked = selectDiscoveredStore("JOETEN", "Saipan", [
+      {
+        name: "Joeten Superstore",
+        address: "Beach Road, Susupe, MP 96950",
+      },
+    ]);
+    expect(picked?.name).toBe("Joeten Superstore");
+  });
 });
 
 describe("market assignment", () => {
@@ -87,9 +112,26 @@ describe("unit prices", () => {
   });
 });
 
+describe("receipt gate", () => {
+  it("rejects low-confidence or non-receipt images", () => {
+    expect(passesReceiptGate({ isReceipt: false, confidence: 0.99 })).toBe(false);
+    expect(passesReceiptGate({ isReceipt: true, confidence: 0.5 })).toBe(false);
+    expect(passesReceiptGate({ isReceipt: true, confidence: 0.9 })).toBe(true);
+  });
+});
+
 describe("outliers", () => {
   it("holds a 4x price against recent observations", () => {
     expect(isOutlier(4000, [900, 950, 1000, 980])).toBe(true);
     expect(isOutlier(1000, [900, 950, 1000])).toBe(false);
+  });
+});
+
+describe("first receipts and reports", () => {
+  it("holds a first receipt and accepts report reasons", () => {
+    expect(firstSubmissionHoldsPrices(0)).toBe(true);
+    expect(firstSubmissionHoldsPrices(2)).toBe(false);
+    expect(isReportReason("wrong_price")).toBe(true);
+    expect(isReportReason("dick-pic")).toBe(false);
   });
 });

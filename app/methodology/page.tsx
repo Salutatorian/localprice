@@ -1,6 +1,6 @@
 export default function MethodologyPage() {
   return (
-    <article className="prose-local space-y-4">
+    <article className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-4xl">Methodology</h1>
       <p>
         LocalPrice publishes anonymous price observations. A newly submitted price never overwrites

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { confirmReceiptAction } from "@/app/actions/receipts";
 import { isUncertain } from "@/domain/extraction";
+import { PrinterHousing, ThermalReceipt } from "@/components/thermal-receipt";
 
 const UNITS = ["oz", "lb", "g", "kg", "ml", "l", "fl_oz", "count", "unknown"] as const;
 type Unit = (typeof UNITS)[number];
@@ -33,7 +34,7 @@ export function ReviewWaiter({ initialStatus }: { initialStatus: string }) {
   const status = initialStatus;
 
   useEffect(() => {
-    if (status === "needs_review" || status === "completed" || status === "failed") {
+    if (status === "needs_review" || status === "completed" || status === "failed" || status === "rejected") {
       return;
     }
     const timer = setInterval(() => {
@@ -44,19 +45,19 @@ export function ReviewWaiter({ initialStatus }: { initialStatus: string }) {
 
   if (status === "queued" || status === "processing" || status === "uploaded") {
     return (
-      <div className="rounded-2xl border border-border bg-card p-6">
-        <h2 className="text-2xl">Reading the receipt</h2>
-        <p className="mt-2 text-muted-foreground">This stays on our servers. Nothing is public yet.</p>
-      </div>
+      <PrinterHousing eyebrow="Till" title="Reading the receipt" status="Still private">
+        <ThermalReceipt storeName="Hang on" printing items={[]} status="Rebuilding line items" />
+      </PrinterHousing>
     );
   }
 
-  if (status === "failed") {
+  if (status === "failed" || status === "rejected") {
     return (
-      <div className="rounded-2xl border border-border bg-card p-6">
-        <h2 className="text-2xl">Extraction failed</h2>
+      <div className="rounded-[1.75rem] bg-card px-6 py-8 text-center ring-1 ring-white/8">
+        <h2 className="text-2xl">Could not read that ticket</h2>
         <p className="mt-2 text-muted-foreground">
-          LocalPrice did not invent a success. Try a straighter photo or a different receipt.
+          It has to be a grocery receipt from a real store. Nonsense or explicit photos are rejected
+          and deleted. Try a straighter photo of the ticket.
         </p>
       </div>
     );
@@ -70,18 +71,22 @@ export function ReviewForm({
   merchantName,
   items,
   storeLookupPending = false,
+  storeVerifiedIn = null,
+  firstSubmission = false,
 }: {
   receiptId: string;
   merchantName: string;
   items: Item[];
   storeLookupPending?: boolean;
+  storeVerifiedIn?: string | null;
+  firstSubmission?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   return (
     <form
-      className="space-y-5"
+      className="space-y-6"
       onSubmit={async (event) => {
         event.preventDefault();
         setPending(true);
@@ -108,7 +113,24 @@ export function ReviewForm({
         }
       }}
     >
-      <div className="rounded-2xl border border-border bg-card p-4">
+      <PrinterHousing
+        eyebrow="Ledger copy"
+        title={merchantName || "Receipt"}
+        amount={pending ? "…" : undefined}
+        status={storeVerifiedIn ? `Matched in ${storeVerifiedIn}` : "Needs a store match"}
+      >
+        <ThermalReceipt
+          storeName={merchantName || "Store"}
+          items={items.map((item) => ({
+            description: item.normalized_name || item.raw_description,
+            totalCents: item.line_total_cents,
+            uncertain: item.needs_review || isUncertain(item.field_confidence.normalizedName ?? 1),
+          }))}
+          status={`${items.length} lines · not the original photo`}
+        />
+      </PrinterHousing>
+
+      <div className="rounded-[1.5rem] bg-card p-4 ring-1 ring-white/8">
         <Label htmlFor="merchantName">Store</Label>
         <Input
           id="merchantName"
@@ -116,10 +138,15 @@ export function ReviewForm({
           defaultValue={merchantName}
           className={isUncertain(0.7) ? "uncertain-field mt-1" : "mt-1"}
         />
-        <p className="mt-1 text-xs text-muted-foreground">Yellow fields are uncertain. Correct only those.</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {storeVerifiedIn
+            ? `Reverse-searched and matched to a real ${storeVerifiedIn} location.`
+            : "Yellow fields are uncertain. Correct only those. The paper above is the public copy."}
+        </p>
       </div>
+
       {items.map((item) => (
-        <fieldset key={item.id} className="rounded-2xl border border-border bg-card p-4">
+        <fieldset key={item.id} className="rounded-[1.5rem] bg-card p-4 ring-1 ring-white/8">
           <legend className="px-1 text-sm text-muted-foreground">{item.raw_description}</legend>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Field
@@ -163,13 +190,19 @@ export function ReviewForm({
       ))}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {storeLookupPending ? (
-        <p className="rounded-xl bg-secondary px-3 py-2 text-sm">
-          This store is not in the LocalPrice registry yet. Confirming will search for it and
-          attach the Saipan location if there is a unique match.
+        <p className="rounded-2xl bg-secondary px-4 py-3 text-sm">
+          This printed store is not in the LocalPrice registry yet. Confirming will reverse-search
+          Saipan maps and business listings. Prices stay unpublished if there is no unique local
+          match.
         </p>
       ) : null}
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Publishing…" : "Confirm and contribute"}
+      {firstSubmission ? (
+        <p className="rounded-2xl bg-secondary px-4 py-3 text-sm">
+          This is your first receipt. A moderator has to publish it before prices hit the board.
+        </p>
+      ) : null}
+      <Button type="submit" className="h-12 w-full" disabled={pending}>
+        {pending ? "Submitting…" : firstSubmission ? "Submit for review" : "Confirm and contribute"}
       </Button>
     </form>
   );

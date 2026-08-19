@@ -20,7 +20,7 @@ export default function ApplyPage() {
         seed stores and receipts, then go public after review.
       </p>
       <form
-        className="space-y-3 rounded-2xl border border-border bg-card p-4"
+        className="space-y-3 rounded-[1.5rem] bg-card p-5 ring-1 ring-white/8"
         onSubmit={async (event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);

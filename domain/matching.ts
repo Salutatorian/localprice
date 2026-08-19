@@ -54,11 +54,34 @@ export function matchStore(
   return { kind: "registry", candidate: top.candidate, confidence: top.confidence };
 }
 
+const MARKET_LOCALITY: Record<string, string[]> = {
+  saipan: [
+    "saipan",
+    "cnmi",
+    "northern mariana",
+    "96950",
+    "susupe",
+    "garapan",
+    "chalan kanoa",
+    "kagman",
+    "koblerville",
+    "coblerville",
+    "dan dan",
+    "tanapag",
+  ],
+};
+
+export function marketLocalityTokens(marketName: string): string[] {
+  const key = marketName.trim().toLowerCase();
+  return MARKET_LOCALITY[key] ?? [key];
+}
+
 export function addressMentionsMarket(address: string | null, marketName: string): boolean {
   if (!address) {
     return false;
   }
-  return address.toLowerCase().includes(marketName.toLowerCase());
+  const hay = address.toLowerCase();
+  return marketLocalityTokens(marketName).some((token) => hay.includes(token));
 }
 
 export function selectDiscoveredStore<T extends { name: string; address: string | null }>(
@@ -67,6 +90,9 @@ export function selectDiscoveredStore<T extends { name: string; address: string 
   places: T[],
 ): T | null {
   const local = places.filter((place) => addressMentionsMarket(place.address, marketName));
+  if (local.length === 0) {
+    return null;
+  }
   const candidates: StoreCandidate[] = local.map((place, index) => ({
     storeId: String(index),
     branchId: String(index),

@@ -3,6 +3,7 @@ import { Fraunces, Figtree, IBM_Plex_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/shell/app-shell";
 import { RegisterPwa } from "@/components/register-pwa";
+import { NativeAuthReturn } from "@/components/native-auth-return";
 import "./globals.css";
 
 const display = Fraunces({
@@ -40,12 +41,12 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "LocalPrice",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f5c57",
+  themeColor: "#1c1a16",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -55,10 +56,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${display.variable} ${body.variable} ${numeric.variable} h-full antialiased`}
+      className={`dark ${display.variable} ${body.variable} ${numeric.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <AppShell>{children}</AppShell>
+        <NativeAuthReturn />
         <RegisterPwa />
         <Toaster />
       </body>

@@ -20,8 +20,7 @@ export default async function LoginPage({
     <div className="py-8">
       {params.error ? (
         <p className="mb-4 text-center text-sm text-destructive">
-          The email link did not create a session. Request a new code and paste it here, or open the
-          link in this same browser.
+          Sign-in did not finish. Try Google again.
         </p>
       ) : null}
       <LoginForm nextPath={next} />

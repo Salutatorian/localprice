@@ -70,7 +70,7 @@ export function InstallGuide() {
         </div>
       </header>
 
-      <section className="rounded-2xl border border-border bg-card p-6">
+      <section className="rounded-[1.75rem] bg-card p-6 ring-1 ring-white/8">
         <h2 className="text-2xl">1. Add to Home Screen</h2>
         <p className="mt-2 text-muted-foreground">
           This is the usual way for the 20–40 person beta. It is the same app in a standalone window,
@@ -113,7 +113,7 @@ export function InstallGuide() {
         ) : null}
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-6">
+      <section className="rounded-[1.75rem] bg-card p-6 ring-1 ring-white/8">
         <h2 className="text-2xl">2. Android file download</h2>
         <p className="mt-2 text-muted-foreground">
           Optional. This installs a thin wrapper that opens the live site. It is not a Play Store
@@ -131,18 +131,20 @@ export function InstallGuide() {
           </p>
         )}
         <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+          <li>If an older LocalPrice file is already installed, uninstall it first.</li>
           <li>On the phone, allow installs from this browser if Android asks.</li>
           <li>Open the downloaded file and tap Install.</li>
-          <li>Ignore Play Protect warnings for this unsigned debug build.</li>
+          <li>Android may warn this is not from Play Store. That is expected for a tester build.</li>
+          <li>After Google sign-in, tap Open LocalPrice if the phone asks.</li>
         </ol>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-6">
+      <section className="rounded-[1.75rem] bg-card p-6 ring-1 ring-white/8">
         <h2 className="text-2xl">3. Invite testers</h2>
         <ol className="mt-2 list-decimal space-y-2 pl-5 text-muted-foreground">
           <li>Send them the site link, not an App Store search.</li>
           <li>Ask Android users to use Chrome; ask iPhone users to use Safari.</li>
-          <li>They sign in with email. The code goes to their inbox, not a local test mailbox.</li>
+          <li>They sign in with Google.</li>
           <li>Receipt photos stay private. Only confirmed prices become public.</li>
         </ol>
       </section>

@@ -8,12 +8,14 @@ import {
 } from "@/domain/extraction";
 import { matchStore, selectDiscoveredStore, type StoreCandidate } from "@/domain/matching";
 import { assignMarket } from "@/domain/assignment";
-import { extractReceiptWithGemini, searchStoreWithGemini } from "@/server/gemini";
+import { extractReceiptWithGemini, searchStoreWithGemini, classifyGroceryReceiptImage } from "@/server/gemini";
 import { getMockExtraction } from "@/server/mock-extraction";
 import { cacheKey, searchPlaces, type PlaceMatch } from "@/server/places";
 import { upsertStoreFromPlace } from "@/server/stores";
 import { ensureProductForItem } from "@/server/products";
+import { enforceRateLimit } from "@/server/rate-limit";
 import { normalizeProductName } from "@/domain/normalization";
+import { NOT_A_RECEIPT_MESSAGE, passesReceiptGate } from "@/domain/receipt-gate";
 
 export async function processExtractionJob(jobId: string) {
   const admin = createAdminSupabase();
@@ -49,6 +51,7 @@ export async function processExtractionJob(jobId: string) {
   }
 
   try {
+    await enforceRateLimit({ action: "extraction", userId: receipt.submitter_id });
     const extracted = await runExtractor(admin, receipt.storage_path, enabled.geminiExtraction);
     const { receipt: validated, issues } = validateExtractedReceipt(extracted);
     const retryable = issues.some((issue) => issue.code === "total_mismatch" || issue.code === "empty_items");
@@ -113,6 +116,7 @@ export async function processExtractionJob(jobId: string) {
       .eq("id", jobId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Extraction failed.";
+    const rejected = message === NOT_A_RECEIPT_MESSAGE;
     await admin
       .from("extraction_jobs")
       .update({
@@ -121,7 +125,17 @@ export async function processExtractionJob(jobId: string) {
         finished_at: new Date().toISOString(),
       })
       .eq("id", jobId);
-    await admin.from("receipts").update({ status: "failed" }).eq("id", receipt.id);
+    await admin
+      .from("receipts")
+      .update(
+        rejected
+          ? { status: "rejected", deleted_at: new Date().toISOString() }
+          : { status: "failed" },
+      )
+      .eq("id", receipt.id);
+    if (rejected) {
+      await admin.storage.from("receipts").remove([receipt.storage_path]);
+    }
   }
 }
 
@@ -147,6 +161,10 @@ async function extractFromStorage(
     throw new Error("Could not download the private receipt image.");
   }
   const bytes = Buffer.from(await data.arrayBuffer());
+  const gate = await classifyGroceryReceiptImage(bytes, "image/jpeg");
+  if (!passesReceiptGate(gate)) {
+    throw new Error(NOT_A_RECEIPT_MESSAGE);
+  }
   return extractReceiptWithGemini(bytes, "image/jpeg", model);
 }
 
@@ -154,7 +172,7 @@ export async function assignReceiptStore(receiptId: string) {
   const admin = createAdminSupabase();
   const { data: receipt } = await admin
     .from("receipts")
-    .select("id, merchant_raw, browsing_market_id, branch_id")
+    .select("id, merchant_raw, address_raw, phone_raw, browsing_market_id, branch_id")
     .eq("id", receiptId)
     .single();
   if (!receipt?.merchant_raw || receipt.branch_id) {
@@ -162,7 +180,11 @@ export async function assignReceiptStore(receiptId: string) {
   }
   const store = await resolveStore(
     admin,
-    { merchantName: receipt.merchant_raw },
+    {
+      merchantName: receipt.merchant_raw,
+      storeAddress: receipt.address_raw,
+      phone: receipt.phone_raw,
+    },
     receipt.browsing_market_id,
   );
   if (store.branchId && store.marketId) {
@@ -175,7 +197,12 @@ export async function assignReceiptStore(receiptId: string) {
 
 async function resolveStore(
   admin: ReturnType<typeof createAdminSupabase>,
-  receipt: { merchantName: string },
+  receipt: {
+    merchantName: string;
+    storeAddress?: string | null;
+    phone?: string | null;
+    branchClues?: string | null;
+  },
   browsingMarketId: string | null,
 ) {
   const { data: aliases } = await admin
@@ -204,7 +231,7 @@ async function resolveStore(
     marketId = match.candidate.marketId;
     placeConfidence = match.confidence;
   } else if (match.kind === "unknown") {
-    const discovered = await discoverStore(admin, receipt.merchantName, browsingMarketId);
+    const discovered = await discoverStore(admin, receipt, browsingMarketId);
     if (discovered) {
       branchId = discovered.branchId;
       marketId = discovered.marketId;
@@ -231,7 +258,12 @@ async function resolveStore(
 
 async function discoverStore(
   admin: ReturnType<typeof createAdminSupabase>,
-  merchantName: string,
+  receipt: {
+    merchantName: string;
+    storeAddress?: string | null;
+    phone?: string | null;
+    branchClues?: string | null;
+  },
   browsingMarketId: string | null,
 ) {
   const { data: markets } = await admin.from("markets").select("id, name, slug").eq("status", "public");
@@ -240,21 +272,28 @@ async function discoverStore(
     return null;
   }
 
-  const key = cacheKey(market.id, merchantName);
+  const lookupQuery = [receipt.merchantName, receipt.storeAddress, receipt.phone, receipt.branchClues]
+    .filter((part): part is string => Boolean(part && part.trim()))
+    .join(" ");
+  const key = cacheKey(market.id, lookupQuery || receipt.merchantName);
   const { data: cached } = await admin.from("places_cache").select("results").eq("query_hash", key).maybeSingle();
   let results = (cached?.results as PlaceMatch[] | null) ?? null;
   if (!results) {
     results = [];
+    const searchQuery = `${lookupQuery} grocery ${market.name}`.replace(/\s+/g, " ").trim();
     if (flags().googlePlaces) {
       try {
-        results = await searchPlaces({ query: merchantName, marketName: market.name });
+        results = await searchPlaces({ query: searchQuery, marketName: market.name });
       } catch {
         results = [];
       }
     }
     if (results.length === 0 && flags().geminiExtraction) {
       try {
-        const found = await searchStoreWithGemini({ merchantName, marketName: market.name });
+        const found = await searchStoreWithGemini({
+          merchantName: receipt.merchantName,
+          marketName: market.name,
+        });
         results = found ? [found] : [];
       } catch {
         results = [];
@@ -267,11 +306,11 @@ async function discoverStore(
     });
   }
 
-  const picked = selectDiscoveredStore(merchantName, market.name, results);
+  const picked = selectDiscoveredStore(receipt.merchantName, market.name, results);
   if (!picked) {
     return null;
   }
-  return upsertStoreFromPlace(admin, market.id, merchantName, picked);
+  return upsertStoreFromPlace(admin, market.id, receipt.merchantName, picked);
 }
 
 async function persistLineItems(

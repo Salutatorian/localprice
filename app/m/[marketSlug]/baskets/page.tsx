@@ -58,7 +58,7 @@ export default async function BasketComparePage({
 
   return (
     <div className="space-y-5">
-      <h1 className="text-3xl">Prices in {market.name}</h1>
+      <h1 className="text-4xl">Prices in {market.name}</h1>
       <p className="text-muted-foreground">
         Totals use products that already have a public price. Missing items are marked, not invented.
       </p>
@@ -69,9 +69,9 @@ export default async function BasketComparePage({
             return null;
           }
           return (
-            <li key={branch.id} className="rounded-2xl border border-border bg-card p-4">
+            <li key={branch.id} className="rounded-[1.5rem] bg-card p-5 ring-1 ring-white/8">
               <p className="font-medium">{branch.name}</p>
-              <p className="font-[family-name:var(--font-numeric)] text-2xl text-[var(--papaya)]">
+              <p className="mt-1 font-[family-name:var(--font-numeric)] text-3xl tracking-tight">
                 {entry.missing === productIds.length ? "—" : formatMoney(entry.total, market.currency_code)}
               </p>
               <p className="text-sm text-muted-foreground">

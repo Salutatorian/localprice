@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 export default function ErrorBoundary({
   error,
   reset,
@@ -8,12 +10,12 @@ export default function ErrorBoundary({
   reset: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-6">
+    <div className="rounded-[1.75rem] bg-card px-6 py-8 ring-1 ring-white/8">
       <h1 className="text-2xl">Something broke</h1>
       <p className="mt-2 text-muted-foreground">{error.message}</p>
-      <button type="button" className="mt-4 text-primary underline" onClick={reset}>
+      <Button type="button" className="mt-5" onClick={reset}>
         Try again
-      </button>
+      </Button>
     </div>
   );
 }

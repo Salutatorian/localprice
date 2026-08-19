@@ -48,6 +48,7 @@ yarn-error.log*
 /ios/App/Pods
 /ios/App/build
 /public/downloads/*.apk
+!/public/downloads/localprice-debug.apk
 
 # typescript
 *.tsbuildinfo

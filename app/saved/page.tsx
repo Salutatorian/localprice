@@ -19,7 +19,7 @@ export default async function SavedBasketsPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-3xl">Saved baskets</h1>
+      <h1 className="text-4xl">Saved baskets</h1>
       {(baskets ?? []).length === 0 ? (
         <EmptyState
           title="No saved baskets"
@@ -30,7 +30,7 @@ export default async function SavedBasketsPage() {
       ) : (
         <ul className="grid gap-3">
           {(baskets ?? []).map((basket) => (
-            <li key={basket.id} className="rounded-2xl border border-border bg-card p-4">
+            <li key={basket.id} className="rounded-[1.5rem] bg-card p-4 ring-1 ring-white/8">
               {basket.name}
             </li>
           ))}

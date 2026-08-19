@@ -1,6 +1,6 @@
 export default function PrivacyPage() {
   return (
-    <article className="space-y-4">
+    <article className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-4xl">Privacy and receipt retention</h1>
       <p>
         Receipt photographs, payment details, transaction numbers, exact GPS, OCR dumps, and user

@@ -1,153 +1,99 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { GoogleLogo } from "@/components/google-logo";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 
+function GoogleButton({
+  label,
+  pending,
+  onClick,
+}: {
+  label: string;
+  pending: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={pending}
+      className="flex h-12 w-full items-center justify-center gap-3 rounded-full border border-[#747775] bg-white text-[15px] font-medium text-[#1f1f1f] shadow-sm transition hover:bg-[#f8f9fa] hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#4285F4]/40 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <GoogleLogo />
+      <span>{pending ? "Opening Google…" : label}</span>
+    </button>
+  );
+}
+
 export function LoginForm({ nextPath }: { nextPath: string }) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [localHost, setLocalHost] = useState(false);
 
   useEffect(() => {
-    setLocalHost(
-      window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1",
-    );
+    if (!Capacitor.isNativePlatform()) {
+      return;
+    }
+    const finished = Browser.addListener("browserFinished", () => {
+      setPending(false);
+    });
+    return () => {
+      void finished.then((handle) => handle.remove());
+    };
   }, []);
 
   async function google() {
+    setPending(true);
+    setMessage(null);
     const supabase = createBrowserSupabase();
     const origin = window.location.origin;
-    const { error } = await supabase.auth.signInWithOAuth({
+    const native = Capacitor.isNativePlatform();
+    const redirectTo = native
+      ? `${origin}/auth/callback?native=1&next=${encodeURIComponent(nextPath)}`
+      : `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+        redirectTo,
+        skipBrowserRedirect: native,
+        queryParams: {
+          prompt: "select_account",
+          access_type: "offline",
+        },
       },
     });
     if (error) {
+      setPending(false);
       setMessage(
         error.message.includes("provider")
-          ? "Google sign-in is not configured on this local server. Use the email code instead."
+          ? "Google is not turned on yet in this project's auth settings."
           : error.message,
       );
-    }
-  }
-
-  async function magicLink(event: React.FormEvent) {
-    event.preventDefault();
-    setPending(true);
-    setMessage(null);
-    const supabase = createBrowserSupabase();
-    const origin = window.location.origin;
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
-      },
-    });
-    setPending(false);
-    if (error) {
-      setMessage(error.message);
       return;
     }
-    setSent(true);
-    setMessage(
-      localHost
-        ? "Code sent. On this computer, open the local inbox — it does not go to Gmail."
-        : "Code sent. Check that email for a 6-digit code or sign-in link.",
-    );
-  }
-
-  async function verifyCode(event: React.FormEvent) {
-    event.preventDefault();
-    setPending(true);
-    setMessage(null);
-    const supabase = createBrowserSupabase();
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: code.trim(),
-      type: "email",
-    });
-    setPending(false);
-    if (error) {
-      setMessage(error.message);
-      return;
+    if (native) {
+      if (!data.url) {
+        setPending(false);
+        setMessage("Could not start Google sign-in.");
+        return;
+      }
+      await Browser.open({ url: data.url, presentationStyle: "popover" });
     }
-    router.replace(nextPath);
-    router.refresh();
   }
 
   return (
-    <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-6">
-      <h1 className="text-3xl">Sign in to contribute</h1>
-      <p className="mt-2 text-muted-foreground">
-        Browsing stays public. Signing in is only required to scan receipts, flag prices, or save a
-        basket.
+    <div className="mx-auto max-w-md rounded-[2rem] bg-till p-7 ring-1 ring-white/8">
+      <p className="text-sm font-medium text-primary">Join the ledger</p>
+      <h1 className="mt-1 text-3xl">Sign in with Google</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Browse prices without an account. Sign in to photograph a receipt and add anonymous prices.
       </p>
-      <Button className="mt-6 w-full" onClick={google}>
-        Continue with Google
-      </Button>
-      <div className="my-6 h-px bg-border" />
-      <form className="space-y-3" onSubmit={magicLink}>
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </div>
-        <Button type="submit" variant="outline" className="w-full" disabled={pending}>
-          {pending && !sent ? "Sending…" : "Email me a code"}
-        </Button>
-      </form>
-      {sent ? (
-        <form className="mt-4 space-y-3" onSubmit={verifyCode}>
-          <p className="text-sm text-muted-foreground">
-            {localHost ? (
-              <>
-                Local inbox:{" "}
-                <a
-                  className="text-primary underline"
-                  href="http://127.0.0.1:54324"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  http://127.0.0.1:54324
-                </a>
-                . Paste the 6-digit code, or open the sign-in link in this same browser tab.
-              </>
-            ) : (
-              "Paste the 6-digit code from your email. If the message includes a link, open it in this same browser."
-            )}
-          </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="code">One-time code</Label>
-            <Input
-              id="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              required
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Signing in…" : "Sign in with code"}
-          </Button>
-        </form>
-      ) : null}
+
+      <div className="mt-6 space-y-3">
+        <GoogleButton label="Continue with Google" pending={pending} onClick={google} />
+      </div>
       {message ? <p className="mt-4 text-sm">{message}</p> : null}
     </div>
   );

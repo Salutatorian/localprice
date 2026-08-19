@@ -29,16 +29,15 @@ export default async function StoreBranchPage({
 
   return (
     <div className="space-y-6">
-      <header>
+      <header className="grain rounded-[2rem] bg-till px-5 py-7 ring-1 ring-white/8">
         <p className="text-sm text-muted-foreground">{found.store.name}</p>
-        <h1 className="text-4xl">{found.branch.name}</h1>
-        <p className="mt-2 text-muted-foreground">{found.branch.address}</p>
-        <p className="mt-1 text-xs uppercase tracking-wide text-primary">{found.branch.verification_status}</p>
+        <h1 className="mt-1 text-4xl">{found.branch.name}</h1>
+        <p className="mt-3 text-xs uppercase tracking-[0.2em] text-primary">{found.branch.verification_status}</p>
       </header>
       {prices.length === 0 ? (
         <EmptyState title="No prices for this branch" body="A receipt from this store will fill this page." />
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           {prices.map((price) => {
             const product = productMap.get(price.product_id);
             return (

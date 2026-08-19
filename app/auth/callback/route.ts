@@ -33,6 +33,13 @@ export async function GET(request: NextRequest) {
   const tokenHash = searchParams.get("token_hash");
   const type = (searchParams.get("type") ?? "email") as EmailOtpType;
 
+  if (searchParams.get("native") === "1") {
+    const hop = request.nextUrl.clone();
+    hop.pathname = "/auth/native";
+    hop.searchParams.delete("native");
+    return NextResponse.redirect(hop);
+  }
+
   const success = NextResponse.redirect(new URL(next, origin));
   const supabase = authClient(request, success);
 

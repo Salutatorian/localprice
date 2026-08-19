@@ -38,7 +38,7 @@ export async function upsertStoreFromPlace(
 
   const storeSlug = slugify(place.name) || slugify(merchantName) || "store";
   const storeId = await ensureStore(admin, storeSlug, place.name);
-  const branchSlug = slugify(place.address?.split(",")[0] ?? "main") || "main";
+  const branchSlug = slugify(place.name) || "main";
 
   const { data: existingBranch } = await admin
     .from("store_branches")

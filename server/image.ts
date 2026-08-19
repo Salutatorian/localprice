@@ -67,8 +67,8 @@ export async function prepareReceiptImage(
   const source = looksLikeHeic(buffer, name, type) ? await heicToJpeg(buffer) : buffer;
   return sharp(source)
     .rotate()
-    .resize({ width: 1600, height: 2200, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 78, mozjpeg: true })
+    .resize({ width: 2400, height: 4800, fit: "inside", withoutEnlargement: true })
+    .jpeg({ quality: 86, mozjpeg: true })
     .withMetadata({})
     .toBuffer();
 }

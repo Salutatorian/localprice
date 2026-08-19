@@ -20,6 +20,9 @@ const serverSchema = z.object({
   FEATURE_GOOGLE_PLACES: boolFromEnv,
   FEATURE_BASKET_COMPARISON: boolFromEnv,
   FEATURE_MODERATION: boolFromEnv,
+  FEATURE_INVITE_ONLY: boolFromEnv,
+  ACCESS_ALLOWLIST: z.string().optional(),
+  ACCESS_ADMIN_EMAILS: z.string().optional(),
   RECEIPT_RETENTION_DAYS: z.coerce.number().min(14).max(30).default(21),
   CRON_SECRET: z.string().optional(),
 });
@@ -48,6 +51,9 @@ export function getServerEnv(): ServerEnv {
     FEATURE_GOOGLE_PLACES: process.env.FEATURE_GOOGLE_PLACES,
     FEATURE_BASKET_COMPARISON: process.env.FEATURE_BASKET_COMPARISON,
     FEATURE_MODERATION: process.env.FEATURE_MODERATION,
+    FEATURE_INVITE_ONLY: process.env.FEATURE_INVITE_ONLY,
+    ACCESS_ALLOWLIST: process.env.ACCESS_ALLOWLIST,
+    ACCESS_ADMIN_EMAILS: process.env.ACCESS_ADMIN_EMAILS,
     RECEIPT_RETENTION_DAYS: process.env.RECEIPT_RETENTION_DAYS,
     CRON_SECRET: process.env.CRON_SECRET,
   });

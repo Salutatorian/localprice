@@ -6,6 +6,7 @@ const LIMITS: Record<string, number> = {
   flag: 12,
   magic_link: 5,
   extraction: 8,
+  access_request: 4,
 };
 
 export async function enforceRateLimit(args: {
@@ -32,8 +33,7 @@ export async function enforceRateLimit(args: {
     );
 
   if (error) {
-    // Rate-limit table is private; fallback insert through SQL is handled by service role.
-    console.error("rate limit read failed", error.message);
+    throw new Error("Could not check rate limits. Try again in a moment.");
   }
 
   if ((count ?? 0) >= limit) {
